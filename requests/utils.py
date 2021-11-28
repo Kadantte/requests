@@ -124,7 +124,10 @@ def super_len(o):
     elif hasattr(o, 'fileno'):
         try:
             fileno = o.fileno()
-        except io.UnsupportedOperation:
+        except (io.UnsupportedOperation, AttributeError):
+            # AttributeError is a surprising exception, seeing as how we've just checked
+            # that `hasattr(o, 'fileno')`.  It happens for objects obtained via
+            # `Tarfile.extractfile()`, per issue 5229.
             pass
         else:
             total_length = os.fstat(fileno).st_size
@@ -251,6 +254,10 @@ def extract_zipped_paths(path):
     archive, member = os.path.split(path)
     while archive and not os.path.exists(archive):
         archive, prefix = os.path.split(archive)
+        if not prefix:
+            # If we don't check for an empty prefix after the split (in other words, archive remains unchanged after the split),
+            # we _can_ end up in an infinite loop on a rare corner case affecting a small number of users
+            break
         member = '/'.join([prefix, member])
 
     if not zipfile.is_zipfile(archive):
